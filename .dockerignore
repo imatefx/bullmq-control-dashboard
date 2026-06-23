@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+server/dist
+web/dist
+dist
+config/config.json
+.git
+.gitignore
+*.log
+*.png
+.playwright-mcp
+docs/screenshots
+.DS_Store
+.env

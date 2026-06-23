@@ -69,6 +69,31 @@ npm start            # http://localhost:3010
 Config is stored at `config/config.json` (gitignored). Override the location with `CONFIG_PATH`,
 the port with `PORT`.
 
+## Docker
+
+Multi-stage `Dockerfile` builds the UI + server into a small runtime image. The config lives on a
+mounted volume so it survives restarts.
+
+```bash
+# Build
+docker build -t bullmq-control-dashboard .
+
+# Run — mount a host folder for the config
+docker run -p 3010:3010 -v "$(pwd)/config:/app/config" bullmq-control-dashboard
+```
+
+Or use Compose (brings up the app + a Redis, with the config volume already wired):
+
+```bash
+docker compose up --build      # http://localhost:3010
+```
+
+Connecting to Redis from inside the container:
+- **Compose**: add a connection with host `redis` (the service name).
+- **Standalone app container → Redis on your host**: use host `host.docker.internal`.
+
+Overridable env vars: `PORT`, `CONFIG_PATH` (default `/app/config/config.json`), `WEB_DIST`.
+
 ## Notes
 
 - **Auth**: none by default — run behind a trusted network / VPN, or add a middleware in

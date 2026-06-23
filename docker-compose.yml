@@ -1,6 +1,25 @@
 services:
+  app:
+    build: .
+    ports:
+      - "3010:3010"
+    volumes:
+      # Persist the dashboard config on the host (the volume mount you asked for).
+      - ./config:/app/config
+    environment:
+      - PORT=3010
+      - CONFIG_PATH=/app/config/config.json
+    depends_on:
+      - redis
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:

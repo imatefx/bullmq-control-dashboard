@@ -8,7 +8,7 @@ import { sseHandler } from './events.js';
 import { initFromConfig } from './queueManager.js';
 
 const PORT = Number(process.env.PORT ?? 3010);
-const WEB_DIST = path.resolve(process.cwd(), '..', 'web', 'dist');
+const WEB_DIST = process.env.WEB_DIST ?? path.resolve(process.cwd(), '..', 'web', 'dist');
 
 async function main() {
   const config = await loadConfig();
