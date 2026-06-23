@@ -12,8 +12,8 @@
     "seed:demo": "tsx src/seed-demo.ts"
   },
   "dependencies": {
-    "@bull-board/api": "^6.14.0",
-    "@bull-board/express": "^6.14.0",
+    "@bull-board/api": "^8.0.1",
+    "@bull-board/express": "^8.0.1",
     "bullmq": "^5.34.0",
     "express": "^4.21.2",
     "ioredis": "^5.4.2",
