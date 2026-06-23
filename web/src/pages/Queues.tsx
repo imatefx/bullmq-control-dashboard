@@ -4,6 +4,7 @@ import { RefreshCw, Search, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, type QueueRow } from '@/lib/api';
 import { useActiveServer } from '@/context/ServerContext';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -21,6 +22,7 @@ import {
 export function QueuesPage() {
   const qc = useQueryClient();
   const { activeId } = useActiveServer();
+  const { isAdmin } = useAuth();
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
     queryFn: api.listConnections,
@@ -98,12 +100,16 @@ export function QueuesPage() {
               onChange={(e) => setFilter(e.target.value)}
             />
           </div>
-          <Button variant="outline" onClick={() => bulk.mutate({ enabled: true })} disabled={bulk.isPending}>
-            <CheckCheck className="h-4 w-4" /> Enable all
-          </Button>
-          <Button variant="outline" onClick={() => rescan.mutate()} disabled={rescan.isPending}>
-            <RefreshCw className={`h-4 w-4 ${rescan.isPending ? 'animate-spin' : ''}`} /> Rescan
-          </Button>
+          {isAdmin && (
+            <Button variant="outline" onClick={() => bulk.mutate({ enabled: true })} disabled={bulk.isPending}>
+              <CheckCheck className="h-4 w-4" /> Enable all
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" onClick={() => rescan.mutate()} disabled={rescan.isPending}>
+              <RefreshCw className={`h-4 w-4 ${rescan.isPending ? 'animate-spin' : ''}`} /> Rescan
+            </Button>
+          )}
         </div>
       </div>
 
@@ -139,6 +145,7 @@ export function QueuesPage() {
                 <QueueEditRow
                   key={row.name}
                   row={row}
+                  editable={isAdmin}
                   onSave={(patch) => upsert.mutate({ name: row.name, ...patch })}
                 />
               ))}
@@ -152,9 +159,11 @@ export function QueuesPage() {
 
 function QueueEditRow({
   row,
+  editable,
   onSave,
 }: {
   row: QueueRow;
+  editable: boolean;
   onSave: (patch: Partial<QueueRow>) => void;
 }) {
   const [displayName, setDisplayName] = useState(row.displayName);
@@ -174,6 +183,7 @@ function QueueEditRow({
         <Input
           value={displayName}
           placeholder={row.name}
+          disabled={!editable}
           onChange={(e) => setDisplayName(e.target.value)}
           onBlur={() => displayName !== row.displayName && onSave({ displayName, delimiter })}
           className="h-8"
@@ -183,6 +193,7 @@ function QueueEditRow({
         <Input
           value={delimiter}
           placeholder="."
+          disabled={!editable}
           onChange={(e) => setDelimiter(e.target.value)}
           onBlur={() => delimiter !== row.delimiter && onSave({ displayName, delimiter })}
           className="h-8"
@@ -191,12 +202,14 @@ function QueueEditRow({
       <TableCell className="text-center">
         <Switch
           checked={row.readOnlyMode}
+          disabled={!editable}
           onCheckedChange={(v) => onSave({ readOnlyMode: v, displayName, delimiter })}
         />
       </TableCell>
       <TableCell className="text-center">
         <Switch
           checked={row.enabled}
+          disabled={!editable}
           onCheckedChange={(v) => onSave({ enabled: v, displayName, delimiter })}
         />
       </TableCell>

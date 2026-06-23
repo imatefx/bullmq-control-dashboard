@@ -1,7 +1,9 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { api } from './api.js';
+import { assertAuthConfigured, authenticate, enforceReadOnlyForReader } from './auth.js';
 import { getBoardRouter } from './bullboard.js';
 import { loadConfig } from './config.js';
 import { sseHandler } from './events.js';
@@ -11,10 +13,20 @@ const PORT = Number(process.env.PORT ?? 3010);
 const WEB_DIST = process.env.WEB_DIST ?? path.resolve(process.cwd(), '..', 'web', 'dist');
 
 async function main() {
+  // Load .env from the repo root (cwd is the server workspace). Real env vars win.
+  dotenv.config({ path: path.resolve(process.cwd(), '..', '.env') });
+  assertAuthConfigured(); // fail closed if admin credentials are missing
   const config = await loadConfig();
 
   const app = express();
   app.use(express.json({ limit: '5mb' }));
+
+  // HTTP Basic Auth gates everything below (API, board iframe, static UI).
+  app.use(authenticate);
+  app.get('/api/me', (req, res) => res.json({ role: req.role, username: req.username }));
+
+  // Readers may only GET — blocks both /api mutations and /board job actions.
+  app.use(enforceReadOnlyForReader);
 
   // Server-Sent Events (must be before the JSON-bodied API router is fine; no body here).
   app.get('/api/events', sseHandler);

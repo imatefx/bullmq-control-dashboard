@@ -9,6 +9,11 @@ services:
     environment:
       - PORT=3010
       - CONFIG_PATH=/app/config/config.json
+      # Auth (required) — set these in a host .env file (see .env.example)
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - READER_USERNAME=${READER_USERNAME:-}
+      - READER_PASSWORD=${READER_PASSWORD:-}
     depends_on:
       - redis
     restart: unless-stopped

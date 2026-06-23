@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Download, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -10,6 +11,7 @@ import { Label } from '@/components/ui/label';
 
 export function ConfigPage() {
   const qc = useQueryClient();
+  const { isAdmin } = useAuth();
   const [includeSecrets, setIncludeSecrets] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -49,43 +51,47 @@ export function ConfigPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <div>
-              <Label>Include secrets</Label>
-              <p className="text-xs text-muted-foreground">
-                Include plaintext passwords in the export (not recommended)
-              </p>
+          {isAdmin && (
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label>Include secrets</Label>
+                <p className="text-xs text-muted-foreground">
+                  Include plaintext passwords in the export (not recommended)
+                </p>
+              </div>
+              <Switch checked={includeSecrets} onCheckedChange={setIncludeSecrets} />
             </div>
-            <Switch checked={includeSecrets} onCheckedChange={setIncludeSecrets} />
-          </div>
+          )}
           <Button asChild>
-            <a href={api.exportUrl(includeSecrets)} download>
+            <a href={api.exportUrl(isAdmin && includeSecrets)} download>
               <Download className="h-4 w-4" /> Download config.json
             </a>
           </Button>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Import</CardTitle>
-          <CardDescription>
-            Replace the current config with an uploaded file. Connections and per-queue settings are
-            restored and re-synced immediately.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <input ref={fileRef} type="file" accept="application/json" hidden onChange={onFile} />
-          <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importMut.isPending}>
-            {importMut.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="h-4 w-4" />
-            )}
-            Import config.json
-          </Button>
-        </CardContent>
-      </Card>
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Import</CardTitle>
+            <CardDescription>
+              Replace the current config with an uploaded file. Connections and per-queue settings
+              are restored and re-synced immediately.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <input ref={fileRef} type="file" accept="application/json" hidden onChange={onFile} />
+            <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={importMut.isPending}>
+              {importMut.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              Import config.json
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

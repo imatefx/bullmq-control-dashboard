@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, Plug, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, type Connection, type ConnectionInput } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,7 @@ function statusBadge(c: Connection) {
 
 export function ConnectionsPage() {
   const qc = useQueryClient();
+  const { isAdmin } = useAuth();
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
     queryFn: api.listConnections,
@@ -103,9 +105,11 @@ export function ConnectionsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Connections</h1>
-        <Button onClick={openAdd}>
-          <Plus className="h-4 w-4" /> Add connection
-        </Button>
+        {isAdmin && (
+          <Button onClick={openAdd}>
+            <Plus className="h-4 w-4" /> Add connection
+          </Button>
+        )}
       </div>
 
       {connections.length === 0 && (
@@ -135,19 +139,21 @@ export function ConnectionsPage() {
               <div className="text-xs text-muted-foreground">
                 auto-refresh {c.autoRefresh ? `every ${Math.round(c.refreshIntervalMs / 1000)}s` : 'off'}
               </div>
-              <div className="flex gap-2 pt-1">
-                <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
-                  <Pencil className="h-3.5 w-3.5" /> Edit
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => remove.mutate(c.id)}
-                  disabled={remove.isPending}
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
-                </Button>
-              </div>
+              {isAdmin && (
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => remove.mutate(c.id)}
+                    disabled={remove.isPending}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}

@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Database, ListTree, LayoutDashboard, Settings, Activity, Server } from 'lucide-react';
 import { api } from '@/lib/api';
 import { ALL_SERVERS, useActiveServer } from '@/context/ServerContext';
+import { useAuth } from '@/context/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
 
@@ -17,6 +19,7 @@ const NAV = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { activeId, setActiveId } = useActiveServer();
+  const { role, username } = useAuth();
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
     queryFn: api.listConnections,
@@ -58,6 +61,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="flex items-center justify-between gap-4 border-b border-border bg-card/50 px-4 py-3 md:px-6">
           <div className="text-sm text-muted-foreground">Central queue management</div>
           <div className="flex items-center gap-2">
+            {role && (
+              <Badge
+                variant={role === 'admin' ? 'default' : 'secondary'}
+                title={username ? `Signed in as ${username}` : undefined}
+              >
+                {username ? `${username} · ${role}` : role}
+              </Badge>
+            )}
             <span className="hidden text-xs text-muted-foreground sm:inline">Active server</span>
             <Select
               value={activeId ?? ALL_SERVERS}

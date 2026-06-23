@@ -51,7 +51,12 @@ Single combined Node service:
 
 Requirements: Node 18+ and a reachable Redis.
 
+> **Auth is required.** The server refuses to start without admin credentials. Copy `.env.example`
+> to `.env` and set `ADMIN_USERNAME` / `ADMIN_PASSWORD` (and optionally a reader). See
+> [Authentication](#authentication).
+
 ```bash
+cp .env.example .env   # set ADMIN_USERNAME / ADMIN_PASSWORD (+ optional reader)
 npm install
 
 # (optional) seed a local Redis with demo queues
@@ -69,6 +74,42 @@ npm start            # http://localhost:3010
 Config is stored at `config/config.json` (gitignored). Override the location with `CONFIG_PATH`,
 the port with `PORT`.
 
+## Authentication
+
+The dashboard is protected by **HTTP Basic Auth** with two env-configured roles:
+
+| Role     | Access |
+| -------- | ------ |
+| `admin`  | Full — manage connections, edit/enable queues, board job actions (retry/clean/pause), import config, export with secrets. |
+| `reader` | Read-only — view every page and the embedded board, but no mutations. |
+
+Credentials come from the environment (a `.env` file works locally; see `.env.example`):
+
+```bash
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change-me
+READER_USERNAME=reader      # optional — omit to disable the reader role
+READER_PASSWORD=change-me-too
+```
+
+How it works:
+- The server **fails closed** — it will not start unless `ADMIN_USERNAME` + `ADMIN_PASSWORD` are set.
+- Enforcement is a single rule: **readers may only issue GET requests.** Every mutating REST
+  endpoint and every bull-board job action is a non-GET request, so this makes the whole app
+  (API + embedded board) read-only for readers (`403` on writes). The UI also hides write controls
+  for readers.
+- The browser prompts once and reuses the credentials for all requests, including the board
+  `<iframe>` and the live SSE stream. (Basic Auth has no real "logout" — close the browser/tab.)
+- **Caveat:** for readers, bull-board's own action buttons are still *visible* in the iframe but
+  return `403` if clicked (we block writes server-side rather than rendering a separate read-only
+  board).
+
+The UI adapts to the role — admin sees all write controls, reader sees a read-only view:
+
+| Admin | Reader |
+| ----- | ------ |
+| ![Admin](docs/screenshots/auth-admin.png) | ![Reader](docs/screenshots/auth-reader.png) |
+
 ## Docker
 
 Multi-stage `Dockerfile` builds the UI + server into a small runtime image. The config lives on a
@@ -78,13 +119,19 @@ mounted volume so it survives restarts.
 # Build
 docker build -t bullmq-control-dashboard .
 
-# Run — mount a host folder for the config
-docker run -p 3010:3010 -v "$(pwd)/config:/app/config" bullmq-control-dashboard
+# Run — mount a host folder for the config and pass auth credentials
+docker run -p 3010:3010 \
+  -v "$(pwd)/config:/app/config" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=change-me \
+  -e READER_USERNAME=reader -e READER_PASSWORD=change-me-too \
+  bullmq-control-dashboard
 ```
 
-Or use Compose (brings up the app + a Redis, with the config volume already wired):
+Or use Compose (brings up the app + a Redis, with the config volume already wired). It reads auth
+credentials from a host `.env` file:
 
 ```bash
+cp .env.example .env           # set ADMIN_USERNAME / ADMIN_PASSWORD
 docker compose up --build      # http://localhost:3010
 ```
 
@@ -96,7 +143,6 @@ Overridable env vars: `PORT`, `CONFIG_PATH` (default `/app/config/config.json`),
 
 ## Notes
 
-- **Auth**: none by default — run behind a trusted network / VPN, or add a middleware in
-  `server/src/index.ts`.
+- **Auth**: HTTP Basic Auth with `admin` / `reader` roles — see [Authentication](#authentication).
 - **Combined board** keys queues by name, so identical queue names across servers are deduped
   (first one wins). Per-server boards have no such limitation.

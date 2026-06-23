@@ -67,7 +67,10 @@ async function req<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type Me = { role: 'admin' | 'reader'; username: string };
+
 export const api = {
+  getMe: () => req<Me>('/api/me'),
   listConnections: () => req<Connection[]>('/api/connections'),
   createConnection: (input: ConnectionInput) =>
     req<Connection>('/api/connections', { method: 'POST', body: JSON.stringify(input) }),

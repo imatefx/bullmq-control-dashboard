@@ -231,7 +231,8 @@ api.get('/overview', async (req, res) => {
 // ---- config import/export ----
 
 api.get('/config/export', (req, res) => {
-  const includeSecrets = req.query.includeSecrets === 'true';
+  // Only admins may pull plaintext secrets; readers always get a redacted export.
+  const includeSecrets = req.role === 'admin' && req.query.includeSecrets === 'true';
   const data = exportConfig(includeSecrets);
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Content-Disposition', 'attachment; filename="queue-dashboard.config.json"');
