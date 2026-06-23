@@ -1,8 +1,24 @@
-# Queue Dashboard
+# BullMQ Control Dashboard
 
 A central **BullMQ queue management** system built on top of
 [bull-board](https://github.com/felixmosh/bull-board), with a responsive React + shadcn UI in
 front of it.
+
+## Screenshots
+
+**Overview** — aggregate job counts across every live queue:
+
+![Overview](docs/screenshots/overview.png)
+
+**Queues** — auto-discovered queues with grouping, rename, and read-only controls:
+
+![Queues](docs/screenshots/queues.png)
+
+**Board** — the embedded bull-board for the active server (or all servers combined):
+
+![Board](docs/screenshots/board.png)
+
+> Screenshots use a demo dataset (`npm run seed:demo`).
 
 - **Add Redis connections** from the UI (multiple servers at once).
 - **Auto-discover** all BullMQ queues in each Redis (`SCAN <prefix>:*:meta`).
@@ -39,7 +55,8 @@ Requirements: Node 18+ and a reachable Redis.
 npm install
 
 # (optional) seed a local Redis with demo queues
-npm run seed
+npm run seed         # 4 simple queues in db 0
+npm run seed:demo    # richer demo set (db 5) used for the screenshots above
 
 # dev: API on :3010, Vite UI on :5173 (proxies /api and /board to the API)
 npm run dev

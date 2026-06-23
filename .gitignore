@@ -7,7 +7,7 @@ config/config.json
 .DS_Store
 .env
 
-# test / screenshot artifacts
+# test / screenshot artifacts (allow curated docs screenshots)
 .playwright-mcp/
-*.png
+/*.png
 

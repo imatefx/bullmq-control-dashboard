@@ -1,5 +1,5 @@
 {
-  "name": "queue-dashboard",
+  "name": "bullmq-control-dashboard",
   "version": "0.1.0",
   "private": true,
   "type": "module",
