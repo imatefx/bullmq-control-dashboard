@@ -1,0 +1,13 @@
+node_modules/
+dist/
+web/dist/
+server/dist/
+config/config.json
+*.log
+.DS_Store
+.env
+
+# test / screenshot artifacts
+.playwright-mcp/
+*.png
+
