@@ -1,8 +1,14 @@
 # BullMQ Control Dashboard
 
+[![Docker Image](https://img.shields.io/docker/v/imatefx/bullmq-control-dashboard?sort=semver&logo=docker&label=docker%20hub)](https://hub.docker.com/r/imatefx/bullmq-control-dashboard)
+[![Image Size](https://img.shields.io/docker/image-size/imatefx/bullmq-control-dashboard/latest?logo=docker)](https://hub.docker.com/r/imatefx/bullmq-control-dashboard)
+
 A central **BullMQ queue management** system built on top of
 [bull-board](https://github.com/felixmosh/bull-board), with a responsive React + shadcn UI in
 front of it.
+
+Published image: [`imatefx/bullmq-control-dashboard`](https://hub.docker.com/r/imatefx/bullmq-control-dashboard)
+(`linux/amd64` + `linux/arm64`).
 
 ## Screenshots
 
@@ -111,6 +117,23 @@ The UI adapts to the role — admin sees all write controls, reader sees a read-
 | ![Admin](docs/screenshots/auth-admin.png) | ![Reader](docs/screenshots/auth-reader.png) |
 
 ## Docker
+
+### Pull the published image
+
+The prebuilt multi-arch image is on Docker Hub — no build required:
+
+```bash
+docker run -p 3010:3010 \
+  -v "$(pwd)/config:/app/config" \
+  -e ADMIN_USERNAME=admin -e ADMIN_PASSWORD=change-me \
+  -e READER_USERNAME=reader -e READER_PASSWORD=change-me-too \
+  imatefx/bullmq-control-dashboard:latest
+```
+
+Then open http://localhost:3010. To reach a Redis running on your host, use host
+`host.docker.internal` when adding a connection.
+
+### Build it yourself
 
 Multi-stage `Dockerfile` builds the UI + server into a small runtime image. The config lives on a
 mounted volume so it survives restarts.
