@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, Search, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
@@ -21,12 +21,19 @@ import {
 
 export function QueuesPage() {
   const qc = useQueryClient();
-  const { activeId } = useActiveServer();
+  const { activeId, setActiveId } = useActiveServer();
   const { isAdmin } = useAuth();
   const { data: connections = [] } = useQuery({
     queryKey: ['connections'],
     queryFn: api.listConnections,
   });
+
+  // The Queues page operates on a single connection; when none is selected
+  // ("All servers"), auto-pick the first and sync the global selector so the
+  // header dropdown and page title always agree.
+  useEffect(() => {
+    if (!activeId && connections.length > 0) setActiveId(connections[0].id);
+  }, [activeId, connections, setActiveId]);
 
   const connId = activeId ?? connections[0]?.id ?? null;
   const conn = connections.find((c) => c.id === connId);

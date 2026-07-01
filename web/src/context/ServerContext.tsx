@@ -9,8 +9,19 @@ const ServerContext = createContext<ServerContextValue | null>(null);
 
 export const ALL_SERVERS = 'all';
 
+const STORAGE_KEY = 'active-server-id';
+
 export function ServerProvider({ children }: { children: ReactNode }) {
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveIdState] = useState<string | null>(
+    () => localStorage.getItem(STORAGE_KEY),
+  );
+
+  const setActiveId = (id: string | null) => {
+    setActiveIdState(id);
+    if (id === null) localStorage.removeItem(STORAGE_KEY);
+    else localStorage.setItem(STORAGE_KEY, id);
+  };
+
   return <ServerContext.Provider value={{ activeId, setActiveId }}>{children}</ServerContext.Provider>;
 }
 
