@@ -20,6 +20,12 @@ const lastDiscovered = new Map<string, string[]>();
 const statuses = new Map<string, ConnStatus>();
 const timers = new Map<string, NodeJS.Timeout>();
 const combinedOwner = new Map<string, string>(); // queueName -> owning connId in combined board
+const generations = new Map<string, number>(); // bumped on teardown; stale syncs bail out
+const syncing = new Set<string>(); // connIds with a sync in flight
+
+// The shared client queues commands until Redis answers, so an unreachable host would
+// otherwise leave discovery (and everything awaiting it) pending forever.
+const DISCOVERY_TIMEOUT_MS = 10_000;
 
 // ---- queries used by the API ----
 
@@ -49,6 +55,29 @@ export function getQueueHandles(connId?: string): { connId: string; name: string
 function setStatus(connId: string, status: ConnStatus): void {
   statuses.set(connId, status);
   broadcast({ type: 'connection:status', connId, status });
+}
+
+function generationOf(connId: string): number {
+  return generations.get(connId) ?? 0;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/** Wait for the client to be connected without queueing a command on it. */
+function waitForReady(client: RedisClient, ms: number, message: string): Promise<void> {
+  if (client.status === 'ready') return Promise.resolve();
+  let onReady!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    onReady = resolve;
+    client.once('ready', onReady);
+  });
+  return withTimeout(ready, ms, message).finally(() => client.off('ready', onReady));
 }
 
 function ensureClient(conn: Connection): RedisClient {
@@ -136,17 +165,37 @@ async function removeEntry(
 }
 
 export async function syncConnection(conn: Connection): Promise<void> {
+  syncing.add(conn.id);
+  try {
+    await doSync(conn);
+  } finally {
+    syncing.delete(conn.id);
+  }
+}
+
+async function doSync(conn: Connection): Promise<void> {
+  const generation = generationOf(conn.id);
   ensureBoard(conn.id);
-  setStatus(conn.id, { state: 'connecting' });
+  // Keep the last known status (ok or error) during re-syncs instead of flickering to 'connecting'.
+  if (!statuses.has(conn.id)) setStatus(conn.id, { state: 'connecting' });
 
   const client = ensureClient(conn);
+  const timeoutMessage = `Redis did not respond within ${DISCOVERY_TIMEOUT_MS / 1000}s (${conn.redis.host}:${conn.redis.port})`;
   let discovered: string[];
   try {
-    discovered = await discoverQueues(client, conn.redis.prefix);
+    await waitForReady(client, DISCOVERY_TIMEOUT_MS, timeoutMessage);
+    discovered = await withTimeout(
+      discoverQueues(client, conn.redis.prefix),
+      DISCOVERY_TIMEOUT_MS,
+      timeoutMessage,
+    );
   } catch (err: any) {
+    // The connection was torn down (edited/deleted) while we waited; its new incarnation owns the status.
+    if (generationOf(conn.id) !== generation) return;
     setStatus(conn.id, { state: 'error', error: err?.message ?? String(err) });
     return;
   }
+  if (generationOf(conn.id) !== generation) return;
   lastDiscovered.set(conn.id, discovered);
 
   const board = ensureBoard(conn.id);
@@ -205,6 +254,8 @@ export function startAutoRefresh(conn: Connection): void {
   if (!conn.autoRefresh) return;
   const timer = setInterval(() => {
     // Always re-read the latest connection (queues/overrides change over time).
+    // Skip the tick while a previous sync is still waiting on Redis, so they don't pile up.
+    if (syncing.has(conn.id)) return;
     const latest = getConfig().connections.find((c) => c.id === conn.id);
     if (latest) void syncConnection(latest);
   }, conn.refreshIntervalMs);
@@ -219,6 +270,7 @@ export function stopAutoRefresh(connId: string): void {
 }
 
 export async function teardownConnection(connId: string): Promise<void> {
+  generations.set(connId, generationOf(connId) + 1);
   stopAutoRefresh(connId);
   const current = registered.get(connId);
   if (current) {
@@ -238,16 +290,24 @@ export async function teardownConnection(connId: string): Promise<void> {
 /** Bring a single connection fully online (board + sync + auto-refresh). */
 export async function activateConnection(conn: Connection): Promise<void> {
   ensureBoard(conn.id);
-  await syncConnection(conn);
+  // Start auto-refresh first so a connection that is down at activation keeps retrying.
   startAutoRefresh(conn);
+  await syncConnection(conn);
 }
 
+/**
+ * Create every board up front, then sync connections in the background so a slow or
+ * unreachable Redis never delays startup (or the other connections).
+ */
 export async function initFromConfig(config: Config): Promise<void> {
   combinedBoard();
-  for (const conn of config.connections) await activateConnection(conn);
+  for (const conn of config.connections) ensureBoard(conn.id);
+  for (const conn of config.connections) void activateConnection(conn);
 }
 
 export async function reinitAll(config: Config): Promise<void> {
-  for (const connId of [...registered.keys()]) await teardownConnection(connId);
+  // Include connections that never synced: they still hold a client and a retry timer.
+  const known = new Set([...registered.keys(), ...clients.keys(), ...timers.keys()]);
+  for (const connId of known) await teardownConnection(connId);
   await initFromConfig(config);
 }
