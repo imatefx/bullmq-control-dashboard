@@ -61,8 +61,25 @@ function ensureDiscoveryClient(conn: Connection): Redis {
   return client;
 }
 
+/**
+ * BullMQ rejects ':' in queue names, but discovery reports names like
+ * `260:v1.bulkSync` when a producer used a longer prefix (`bull:260`).
+ * Everything before the last ':' belongs to the prefix; the Redis keys are identical.
+ */
+function splitQueueName(name: string): { head: string; queueName: string } {
+  const i = name.lastIndexOf(':');
+  return i < 0 ? { head: '', queueName: name } : { head: name.slice(0, i), queueName: name.slice(i + 1) };
+}
+
+// bull-board keys queues by `${adapter prefix}${queue.name}`; restore the full discovered name.
+function boardPrefix(name: string): string | undefined {
+  const { head } = splitQueueName(name);
+  return head ? `${head}:` : undefined;
+}
+
 function makeAdapter(queue: Queue, ov: QueueOverride): BullMQAdapter {
   return new BullMQAdapter(queue, {
+    prefix: boardPrefix(ov.name),
     displayName: ov.displayName || undefined,
     delimiter: ov.delimiter || undefined,
     description: ov.description || undefined,
@@ -72,6 +89,7 @@ function makeAdapter(queue: Queue, ov: QueueOverride): BullMQAdapter {
 
 function makeCombinedAdapter(queue: Queue, conn: Connection, ov: QueueOverride): BullMQAdapter {
   return new BullMQAdapter(queue, {
+    prefix: boardPrefix(ov.name),
     displayName: `${conn.name} / ${ov.displayName || ov.name}`,
     delimiter: ov.delimiter || undefined,
     readOnlyMode: ov.readOnlyMode,
@@ -84,9 +102,10 @@ async function addEntry(
   ov: QueueOverride,
   current: Map<string, Entry>,
 ): Promise<void> {
-  const queue = new Queue(name, {
+  const { head, queueName } = splitQueueName(name);
+  const queue = new Queue(queueName, {
     connection: toRedisOptions(conn.redis),
-    prefix: conn.redis.prefix,
+    prefix: head ? `${conn.redis.prefix}:${head}` : conn.redis.prefix,
   });
   const adapter = makeAdapter(queue, ov);
   ensureBoard(conn.id).addQueue(adapter);
@@ -158,13 +177,21 @@ export async function syncConnection(conn: Connection): Promise<void> {
     }
   }
 
-  // Add newly desired queues.
+  // Add newly desired queues. One bad queue must not take down the connection (or the process).
+  const failed: string[] = [];
   for (const [name, ov] of desired) {
-    if (!current.has(name)) await addEntry(conn, name, ov, current);
+    if (current.has(name)) continue;
+    try {
+      await addEntry(conn, name, ov, current);
+    } catch (err: any) {
+      console.error(`[queue-dashboard] ${conn.name}: cannot register queue "${name}":`, err?.message ?? err);
+      failed.push(`${name}: ${err?.message ?? String(err)}`);
+    }
   }
 
   setStatus(conn.id, {
     state: 'ok',
+    error: failed.length ? `Failed to register ${failed.join('; ')}` : undefined,
     discovered: discovered.length,
     registered: current.size,
     lastSync: Date.now(),

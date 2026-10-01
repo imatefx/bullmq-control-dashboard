@@ -133,7 +133,7 @@ export function ConnectionsPage() {
                 {c.redis.tls ? ' · tls' : ''}
                 {c.redis.hasPassword ? ' · 🔒' : ''}
               </div>
-              {c.status?.state === 'error' && (
+              {c.status?.error && (
                 <div className="text-xs text-destructive">{c.status.error}</div>
               )}
               <div className="text-xs text-muted-foreground">
