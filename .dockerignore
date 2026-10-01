@@ -3,7 +3,10 @@ node_modules
 server/dist
 web/dist
 dist
-config/config.json
+config/*
+!config/config.example.json
+.omc
+**/.omc
 .git
 .gitignore
 *.log
