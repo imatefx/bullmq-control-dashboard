@@ -3,9 +3,14 @@ import { z } from 'zod';
 export const RedisConfigSchema = z.object({
   host: z.string().min(1),
   port: z.number().int().default(6379),
+  // ACL / ElastiCache RBAC user; empty means the default user.
+  username: z.string().optional(),
   password: z.string().optional(),
   db: z.number().int().default(0),
   tls: z.boolean().default(false),
+  // Redis Cluster (e.g. ElastiCache cluster mode enabled): host/port is a seed node or the
+  // configuration endpoint. `db` is ignored — clusters only have db 0.
+  cluster: z.boolean().default(false),
   // BullMQ key prefix used when scanning/instantiating queues (default 'bull')
   prefix: z.string().default('bull'),
 });

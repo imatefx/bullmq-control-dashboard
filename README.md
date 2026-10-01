@@ -164,6 +164,19 @@ Connecting to Redis from inside the container:
 
 Overridable env vars: `PORT`, `CONFIG_PATH` (default `/app/config/config.json`), `WEB_DIST`.
 
+## Redis Cluster / AWS ElastiCache
+
+- **Cluster mode disabled** (single shard, with or without replicas): use the *primary endpoint*
+  as a normal connection. Turn on **TLS** if in-transit encryption is enabled.
+- **Cluster mode enabled**: use the *configuration endpoint* and turn on **Cluster mode** (plus
+  **TLS** if in-transit encryption is enabled). Every shard is scanned for queues, and keys are
+  routed with `MOVED`/`ASK` redirects. `DB` is ignored, because clusters only have db 0.
+- **Auth**: put the AUTH token in *Password*. With RBAC user groups, also set *Username*.
+- **Key prefix** must match your producers. BullMQ on a cluster needs a hash-tagged prefix such
+  as `{bull}`, so set the same value here.
+- **Test** warns you if the server is running in cluster mode but the connection isn't set to
+  *Cluster mode*.
+
 ## Notes
 
 - **Auth**: HTTP Basic Auth with `admin` / `reader` roles — see [Authentication](#authentication).

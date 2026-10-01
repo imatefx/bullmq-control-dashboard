@@ -20,7 +20,16 @@ import {
 
 const EMPTY: ConnectionInput = {
   name: '',
-  redis: { host: '127.0.0.1', port: 6379, password: '', db: 0, tls: false, prefix: 'bull' },
+  redis: {
+    host: '127.0.0.1',
+    port: 6379,
+    username: '',
+    password: '',
+    db: 0,
+    tls: false,
+    cluster: false,
+    prefix: 'bull',
+  },
   autoRefresh: true,
   refreshIntervalMs: 15000,
 };
@@ -92,7 +101,11 @@ export function ConnectionsPage() {
     setTesting(true);
     try {
       const r = await api.testConnection({ redis: form.redis });
-      if (r.ok) toast.success(`Connected · Redis ${r.version ?? ''} (${r.ping})`);
+      if (r.ok) {
+        const nodes = r.nodes !== undefined ? ` · ${r.nodes} shard(s)` : '';
+        toast.success(`Connected · Redis ${r.version ?? ''} (${r.ping})${nodes}`);
+        if (r.warning) toast.warning(r.warning);
+      }
       else toast.error(`Failed: ${r.error}`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -131,6 +144,7 @@ export function ConnectionsPage() {
               <div className="font-mono text-xs text-muted-foreground">
                 {c.redis.host}:{c.redis.port} · db{c.redis.db} · prefix “{c.redis.prefix}”
                 {c.redis.tls ? ' · tls' : ''}
+                {c.redis.cluster ? ' · cluster' : ''}
                 {c.redis.hasPassword ? ' · 🔒' : ''}
               </div>
               {c.status?.error && (
@@ -189,21 +203,33 @@ export function ConnectionsPage() {
                 />
               </Field>
             </div>
-            <Field label={editing ? 'Password (leave blank to keep)' : 'Password (optional)'}>
-              <Input
-                type="password"
-                value={form.redis.password}
-                onChange={(e) =>
-                  setForm({ ...form, redis: { ...form.redis, password: e.target.value } })
-                }
-                placeholder="supports ${ENV_VAR}"
-              />
-            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Username (optional)">
+                <Input
+                  value={form.redis.username ?? ''}
+                  onChange={(e) =>
+                    setForm({ ...form, redis: { ...form.redis, username: e.target.value } })
+                  }
+                  placeholder="ACL / RBAC user"
+                />
+              </Field>
+              <Field label={editing ? 'Password (leave blank to keep)' : 'Password (optional)'}>
+                <Input
+                  type="password"
+                  value={form.redis.password}
+                  onChange={(e) =>
+                    setForm({ ...form, redis: { ...form.redis, password: e.target.value } })
+                  }
+                  placeholder="supports ${ENV_VAR}"
+                />
+              </Field>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="DB">
                 <Input
                   type="number"
-                  value={form.redis.db}
+                  disabled={form.redis.cluster}
+                  value={form.redis.cluster ? 0 : form.redis.db}
                   onChange={(e) =>
                     setForm({ ...form, redis: { ...form.redis, db: Number(e.target.value) } })
                   }
@@ -217,6 +243,20 @@ export function ConnectionsPage() {
                   }
                 />
               </Field>
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <Label>Cluster mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  Redis Cluster / ElastiCache cluster mode — use the configuration endpoint
+                </p>
+              </div>
+              <Switch
+                checked={form.redis.cluster}
+                onCheckedChange={(v) =>
+                  setForm({ ...form, redis: { ...form.redis, cluster: v, db: v ? 0 : form.redis.db } })
+                }
+              />
             </div>
             <div className="flex items-center justify-between rounded-md border p-3">
               <Label>TLS</Label>

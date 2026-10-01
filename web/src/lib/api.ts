@@ -9,8 +9,10 @@ export type ConnStatus = {
 export type RedisInfo = {
   host: string;
   port: number;
+  username?: string;
   db: number;
   tls: boolean;
+  cluster: boolean;
   prefix: string;
   hasPassword: boolean;
 };
@@ -45,9 +47,11 @@ export type ConnectionInput = {
   redis: {
     host: string;
     port: number;
+    username?: string;
     password?: string;
     db: number;
     tls: boolean;
+    cluster: boolean;
     prefix: string;
   };
   autoRefresh: boolean;
@@ -78,7 +82,7 @@ export const api = {
     req<Connection>(`/api/connections/${id}`, { method: 'PUT', body: JSON.stringify(input) }),
   deleteConnection: (id: string) => req<void>(`/api/connections/${id}`, { method: 'DELETE' }),
   testConnection: (payload: { id?: string; redis?: ConnectionInput['redis'] }) =>
-    req<{ ok: boolean; ping?: string; version?: string; error?: string }>(
+    req<{ ok: boolean; ping?: string; version?: string; nodes?: number; warning?: string; error?: string }>(
       `/api/connections/${payload.id ?? 'adhoc'}/test`,
       { method: 'POST', body: JSON.stringify(payload.redis ? { redis: payload.redis } : {}) },
     ),

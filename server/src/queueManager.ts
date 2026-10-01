@@ -1,11 +1,10 @@
-import { Queue } from 'bullmq';
+import { Queue, type ConnectionOptions } from 'bullmq';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
-import type { Redis } from 'ioredis';
 import { combinedBoard, destroyBoard, ensureBoard } from './bullboard.js';
 import { getConfig } from './config.js';
 import { discoverQueues } from './discovery.js';
 import { broadcast, type ConnStatus } from './events.js';
-import { createDiscoveryClient, toRedisOptions } from './redis.js';
+import { createClient, type RedisClient } from './redis.js';
 import type { Config, Connection, QueueOverride } from './types.js';
 
 type Entry = {
@@ -16,7 +15,7 @@ type Entry = {
 };
 
 const registered = new Map<string, Map<string, Entry>>();
-const discoveryClients = new Map<string, Redis>();
+const clients = new Map<string, RedisClient>(); // one per connection, shared by its queues
 const lastDiscovered = new Map<string, string[]>();
 const statuses = new Map<string, ConnStatus>();
 const timers = new Map<string, NodeJS.Timeout>();
@@ -52,11 +51,11 @@ function setStatus(connId: string, status: ConnStatus): void {
   broadcast({ type: 'connection:status', connId, status });
 }
 
-function ensureDiscoveryClient(conn: Connection): Redis {
-  let client = discoveryClients.get(conn.id);
+function ensureClient(conn: Connection): RedisClient {
+  let client = clients.get(conn.id);
   if (!client) {
-    client = createDiscoveryClient(conn.redis);
-    discoveryClients.set(conn.id, client);
+    client = createClient(conn.redis);
+    clients.set(conn.id, client);
   }
   return client;
 }
@@ -104,7 +103,9 @@ async function addEntry(
 ): Promise<void> {
   const { head, queueName } = splitQueueName(name);
   const queue = new Queue(queueName, {
-    connection: toRedisOptions(conn.redis),
+    // A shared client: BullMQ won't close it on queue.close(); teardownConnection does.
+    // bullmq pins its own ioredis copy; it detects clients by shape, so only the types differ.
+    connection: ensureClient(conn) as unknown as ConnectionOptions,
     prefix: head ? `${conn.redis.prefix}:${head}` : conn.redis.prefix,
   });
   const adapter = makeAdapter(queue, ov);
@@ -138,7 +139,7 @@ export async function syncConnection(conn: Connection): Promise<void> {
   ensureBoard(conn.id);
   setStatus(conn.id, { state: 'connecting' });
 
-  const client = ensureDiscoveryClient(conn);
+  const client = ensureClient(conn);
   let discovered: string[];
   try {
     discovered = await discoverQueues(client, conn.redis.prefix);
@@ -226,10 +227,10 @@ export async function teardownConnection(connId: string): Promise<void> {
   registered.delete(connId);
   lastDiscovered.delete(connId);
   statuses.delete(connId);
-  const client = discoveryClients.get(connId);
+  const client = clients.get(connId);
   if (client) {
     client.disconnect();
-    discoveryClients.delete(connId);
+    clients.delete(connId);
   }
   destroyBoard(connId);
 }
