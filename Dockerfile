@@ -1,5 +1,5 @@
 # ---- Build stage: install all deps and build web + server ----
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 
 # Install workspace dependencies (root + server + web)
@@ -13,7 +13,7 @@ COPY . .
 RUN npm run build
 
 # ---- Runtime stage: production deps + built artifacts only ----
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
