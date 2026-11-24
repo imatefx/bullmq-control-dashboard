@@ -15,3 +15,7 @@ config/*
 docs/screenshots
 .DS_Store
 .env
+coverage
+**/coverage
+test-results
+playwright-report

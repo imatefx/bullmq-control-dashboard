@@ -13,9 +13,16 @@
     "dev:web": "npm -w web run dev",
     "build": "npm -w web run build && npm -w server run build",
     "start": "npm -w server run start",
-    "seed": "npm -w server run seed"
+    "seed": "npm -w server run seed",
+    "test": "npm -w server run test && npm run test:e2e",
+    "coverage": "npm -w server run coverage",
+    "test:unit": "npm -w server run test:unit",
+    "test:integration": "npm -w server run test:integration",
+    "test:e2e": "npm run build && playwright test",
+    "typecheck:e2e": "tsc -p e2e/tsconfig.json"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "concurrently": "^9.1.0"
   }
 }
