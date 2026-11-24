@@ -66,6 +66,17 @@ test('the embedded bull-board shows enabled queues', async ({ page }) => {
   await expect(board.getByText('billing').first()).toBeVisible({ timeout: 15_000 });
 });
 
+test('testing a connection with a wrong password says so', async ({ page }) => {
+  await page.goto('/connections');
+  await page.getByRole('button', { name: 'Add connection' }).click();
+  await fillRedis(page);
+  await page.getByPlaceholder('ACL / RBAC user').fill('nobody');
+  await page.getByPlaceholder('supports ${ENV_VAR}').fill('wrong');
+  await page.getByRole('dialog').getByRole('button', { name: 'Test' }).click();
+  await expect(page.getByText(/^Failed: WRONGPASS/)).toBeVisible();
+  await expect(page.getByText('Connection is closed.')).toHaveCount(0);
+});
+
 test('a connection to an unreachable Redis shows an error instead of hanging', async ({ page }) => {
   await page.goto('/connections');
   await page.getByRole('button', { name: 'Add connection' }).click();

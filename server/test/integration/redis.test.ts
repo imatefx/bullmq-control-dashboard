@@ -43,11 +43,13 @@ describe('testConnection against real Redis', () => {
     expect(Date.now() - started).toBeLessThan(6000);
   });
 
-  it('rejects wrong credentials', async () => {
-    // Known gap: ioredis surfaces 'Connection is closed.' rather than the WRONGPASS reply,
-    // so the UI cannot tell bad credentials from a dropped connection.
+  it('reports WRONGPASS for wrong credentials, not "Connection is closed."', async () => {
     await expect(
       testConnection(redisConfig({ ...redisAddr(), username: 'nobody', password: 'wrong' })),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/^WRONGPASS/);
+  });
+
+  it('reports the connection error for a closed port', async () => {
+    await expect(testConnection(redisConfig({ host: '127.0.0.1', port: 1 }))).rejects.toThrow(/ECONNREFUSED/);
   });
 });

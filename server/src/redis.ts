@@ -4,6 +4,22 @@ import type { RedisConfig } from './types.js';
 
 export type RedisClient = Redis | Cluster;
 
+// ioredis reports the server's actual reason (WRONGPASS, NOAUTH, ECONNREFUSED, ...) only via
+// 'error' events; the promises just reject with 'Connection is closed.'. Keep the latest one.
+const lastErrors = new WeakMap<RedisClient, Error>();
+
+function trackErrors(client: RedisClient): void {
+  // Listening also keeps transient connection errors from crashing the process.
+  client.on('error', (err: Error) => lastErrors.set(client, err));
+  // Once connected, older errors no longer describe the connection.
+  client.on('ready', () => lastErrors.delete(client));
+}
+
+/** The most recent connection error reported by the client, if any. */
+export function getLastError(client: RedisClient): Error | undefined {
+  return lastErrors.get(client);
+}
+
 /** Per-node options shared by standalone and cluster clients. */
 function nodeOptions(r: RedisConfig): RedisOptions {
   return {
@@ -36,8 +52,7 @@ export function createClient(r: RedisConfig): RedisClient {
   const client = r.cluster
     ? new Cluster([{ host: r.host, port: r.port }], clusterOptions(r))
     : new Redis(standaloneOptions(r));
-  // Avoid crashing the process on transient connection errors.
-  client.on('error', () => {});
+  trackErrors(client);
   return client;
 }
 
@@ -58,10 +73,16 @@ export async function testConnection(
         retryStrategy: () => null,
         maxRetriesPerRequest: 1,
       });
-  client.on('error', () => {});
+  trackErrors(client);
   try {
-    await client.connect();
-    const ping = await client.ping();
+    let ping: string;
+    try {
+      await client.connect();
+      ping = await client.ping();
+    } catch (err) {
+      // Prefer the server's reason (e.g. WRONGPASS) over ioredis' generic 'Connection is closed.'
+      throw getLastError(client) ?? err;
+    }
     let version: string | undefined;
     let warning: string | undefined;
     try {

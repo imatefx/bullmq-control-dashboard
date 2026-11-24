@@ -4,24 +4,27 @@ import { redisConfig } from '../support/fixtures.js';
 // Record what the code under test asks ioredis for, without opening sockets.
 const h = vi.hoisted(() => {
   const behaviour = {
-    connect: async () => {},
+    connect: async function (this: any) {},
     info: async () => 'redis_version:7.2.4\r\ncluster_enabled:0\r\n',
   };
   class FakeClient {
     static instances: FakeClient[] = [];
-    handlers: Record<string, unknown> = {};
+    handlers: Record<string, (...a: any[]) => void> = {};
     disconnect = vi.fn();
     constructor(...args: unknown[]) {
       (this.constructor as typeof FakeClient).instances.push(this);
       this.args = args;
     }
     args: unknown[];
-    on(ev: string, fn: unknown) {
+    on(ev: string, fn: (...a: any[]) => void) {
       this.handlers[ev] = fn;
       return this;
     }
+    emit(ev: string, ...a: any[]) {
+      this.handlers[ev]?.(...a);
+    }
     connect() {
-      return behaviour.connect();
+      return behaviour.connect.call(this);
     }
     ping() {
       return Promise.resolve('PONG');
@@ -44,12 +47,12 @@ const h = vi.hoisted(() => {
 
 vi.mock('ioredis', () => ({ Redis: h.Redis, Cluster: h.Cluster }));
 
-const { createClient, testConnection } = await import('../../src/redis.js');
+const { createClient, getLastError, testConnection } = await import('../../src/redis.js');
 
 beforeEach(() => {
   h.Redis.instances = [];
   h.Cluster.instances = [];
-  h.behaviour.connect = async () => {};
+  h.behaviour.connect = async function () {};
   h.behaviour.info = async () => 'redis_version:7.2.4\r\ncluster_enabled:0\r\n';
 });
 
@@ -73,6 +76,17 @@ describe('createClient', () => {
   it('swallows connection errors so they cannot crash the process', () => {
     createClient(redisConfig());
     expect(typeof h.Redis.instances[0].handlers.error).toBe('function');
+  });
+
+  it('remembers the latest connection error until the client is ready', () => {
+    const client = createClient(redisConfig());
+    const fake = h.Redis.instances[0];
+    expect(getLastError(client)).toBeUndefined();
+    fake.emit('error', new Error('ECONNREFUSED'));
+    fake.emit('error', new Error('WRONGPASS invalid username-password pair'));
+    expect(getLastError(client)?.message).toMatch(/^WRONGPASS/);
+    fake.emit('ready');
+    expect(getLastError(client)).toBeUndefined();
   });
 
   it('omits empty credentials and TLS when not configured', () => {
@@ -126,6 +140,19 @@ describe('testConnection', () => {
     };
     const r = await testConnection(redisConfig());
     expect(r).toMatchObject({ ping: 'PONG', version: undefined });
+  });
+
+  it.each([
+    ['WRONGPASS invalid username-password pair or user is disabled.'],
+    ['NOAUTH Authentication required.'],
+  ])('reports the server reason (%s), not "Connection is closed."', async (reason) => {
+    // ioredis emits the reply as an 'error' event and rejects connect() generically.
+    h.behaviour.connect = async function (this: any) {
+      this.emit('error', new Error(reason));
+      throw new Error('Connection is closed.');
+    };
+    await expect(testConnection(redisConfig({ password: 'wrong' }))).rejects.toThrow(reason);
+    expect(h.Redis.instances[0].disconnect).toHaveBeenCalled();
   });
 
   it('throws on connection failure and always disconnects', async () => {
