@@ -7,6 +7,7 @@ const h = vi.hoisted(() => {
   class FakeRedis extends (require('node:events').EventEmitter as typeof EventEmitter) {
     status = 'ready';
     keys: string[] = [];
+    lastError?: Error;
     disconnect = vi.fn();
     async scan() {
       return ['0', this.keys] as [string, string[]];
@@ -26,6 +27,7 @@ vi.mock('../../src/redis.js', () => ({
     h.clients.push(c);
     return c;
   },
+  getLastError: (c: { lastError?: Error }) => c.lastError,
 }));
 
 vi.mock('bullmq', () => ({
@@ -210,6 +212,24 @@ describe('syncConnection', () => {
     });
     // The 'ready' listener must not leak.
     expect(h.clients.at(-1)!.listenerCount('ready')).toBe(0);
+  });
+
+  it('includes the reason Redis never became ready (e.g. a wrong password)', async () => {
+    vi.useFakeTimers();
+    const c = conn([], { redis: { host: 'r', port: 6379 } as any });
+    h.state.nextClient = () =>
+      Object.assign(new h.FakeRedis(), {
+        status: 'connecting',
+        lastError: new Error('WRONGPASS invalid username-password pair or user is disabled.'),
+      });
+    const done = qm.syncConnection(c);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await done;
+    expect(qm.getStatus(c.id)).toEqual({
+      state: 'error',
+      error:
+        'Redis did not respond within 10s (r:6379): WRONGPASS invalid username-password pair or user is disabled.',
+    });
   });
 
   it('times out when Redis is connected but discovery never answers', async () => {

@@ -133,6 +133,19 @@ describe('connections', () => {
     expect((await call('POST', '/api/connections/x/test', { body: { redis: { port: 'x' } } })).status).toBe(400);
   });
 
+  it('explains a wrong password in the test result and the connection status', async () => {
+    const bad = { ...redisAddr(), username: 'nobody', password: 'wrong' };
+    const tested = await call('POST', '/api/connections/new/test', { body: { redis: bad } });
+    expect(tested.json).toEqual({ ok: false, error: expect.stringMatching(/^WRONGPASS/) });
+
+    // A saved connection with bad credentials times out, and says why.
+    const conn = await addConnection({ redis: bad });
+    expect(conn.status).toEqual({
+      state: 'error',
+      error: expect.stringMatching(/did not respond within 10s .*: WRONGPASS/),
+    });
+  }, 30_000);
+
   it('deletes a connection', async () => {
     const conn = await addConnection();
     expect((await call('DELETE', `/api/connections/${conn.id}`)).status).toBe(204);

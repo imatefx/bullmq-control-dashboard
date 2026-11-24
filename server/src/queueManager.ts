@@ -4,7 +4,7 @@ import { combinedBoard, destroyBoard, ensureBoard } from './bullboard.js';
 import { getConfig } from './config.js';
 import { discoverQueues } from './discovery.js';
 import { broadcast, type ConnStatus } from './events.js';
-import { createClient, type RedisClient } from './redis.js';
+import { createClient, getLastError, type RedisClient } from './redis.js';
 import type { Config, Connection, QueueOverride } from './types.js';
 
 type Entry = {
@@ -192,7 +192,10 @@ async function doSync(conn: Connection): Promise<void> {
   } catch (err: any) {
     // The connection was torn down (edited/deleted) while we waited; its new incarnation owns the status.
     if (generationOf(conn.id) !== generation) return;
-    setStatus(conn.id, { state: 'error', error: err?.message ?? String(err) });
+    // Say why Redis never answered (e.g. WRONGPASS) rather than only that it timed out.
+    const cause = getLastError(client)?.message;
+    const message = err?.message ?? String(err);
+    setStatus(conn.id, { state: 'error', error: cause ? `${message}: ${cause}` : message });
     return;
   }
   if (generationOf(conn.id) !== generation) return;
