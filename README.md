@@ -116,6 +116,21 @@ The UI adapts to the role — admin sees all write controls, reader sees a read-
 | ----- | ------ |
 | ![Admin](docs/screenshots/auth-admin.png) | ![Reader](docs/screenshots/auth-reader.png) |
 
+## Testing
+
+| Suite | Command | What it covers | Needs |
+| ----- | ------- | -------------- | ----- |
+| Unit | `npm run test:unit` | `server/test/unit` — config, auth, discovery, Redis client options, queue sync/reconcile/timeouts, SSE (Redis/BullMQ mocked) | nothing |
+| Integration | `npm run test:integration` | `server/test/integration` — discovery, connection tests and the full HTTP API (auth, roles, queues, board, import/export) against a real Redis | Docker |
+| E2E | `npm run test:e2e` | `e2e/` — Playwright drives the production build in Chromium: add a connection, enable queues, live counts, embedded board, reader role, unreachable Redis | Docker, `npx playwright install chromium` |
+
+`npm run coverage` runs unit + integration with V8 coverage (HTML report in `server/coverage/`).
+`npm test` runs all three suites.
+
+Redis for integration and e2e is started automatically with [Testcontainers](https://testcontainers.com/).
+To use an existing Redis instead, set `TEST_REDIS_HOST` / `TEST_REDIS_PORT` (and optionally
+`TEST_REDIS_DB`, default `15`). That one database is **flushed** by the tests. Set `E2E_DEBUG=1` to see the e2e server's output.
+
 ## Docker
 
 ### Pull the published image
